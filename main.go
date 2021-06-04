@@ -24,8 +24,8 @@ import (
 	"net"
 	"os"
 
-    "github.com/aretaja/icingahelper"
-    "github.com/aretaja/snmphelper"
+	"github.com/aretaja/icingahelper"
+	"github.com/aretaja/snmphelper"
 )
 
 // Version of release
