@@ -17,7 +17,7 @@ import (
 )
 
 // Version of release
-const Version = "1.0.0"
+const Version = "1.0.1"
 
 func main() {
 	// Parse cli arguments
