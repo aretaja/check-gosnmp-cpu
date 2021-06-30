@@ -8,25 +8,16 @@ package main
 import (
 	"flag"
 	"fmt"
-	"math"
 	"net"
 	"os"
 
+	"github.com/aretaja/check-gosnmp-cpu/cpu"
 	"github.com/aretaja/icingahelper"
 	"github.com/aretaja/snmphelper"
 )
 
 // Version of release
-const Version = "0.0.1"
-
-// Struct for cpu data gathered using HOST-RESOURCES-MIB
-type cpuLoad struct {
-	cpuCnt int64
-	load   int64
-}
-
-// .iso.org.dod.internet.mgmt.mib-2.host.hrDevice.hrProcessorTable.hrProcessorEntry.hrProcessorLoad
-const procLoad = ".1.3.6.1.2.1.25.3.3.1.2"
+const Version = "1.0.0"
 
 func main() {
 	// Parse cli arguments
@@ -38,8 +29,29 @@ func main() {
 	var snmpSlevel = flag.String("l", "authPriv", "[security level] (noAuthNoPriv|authNoPriv|authPriv)")
 	var snmpPrivProt = flag.String("x", "DES", "[privacy protocol] (NoPriv|DES|AES|AES192|AES256|AES192C|AES256C)")
 	var snmpPrivPass = flag.String("X", "", "[privacy protocol pass phrase]")
-	var warn = flag.String("w", "85", "[warning level] (%)")
-	var crit = flag.String("c", "95", "[critical level] (%)")
+	var warn = flag.String("w", "85", "[warning level]. It depends of check type.\n"+
+		"\thost - % of average cpu utilization of all cores\n"+
+		"\tsystat - % of cpu utilization\n"+
+		"\tloadavg - summary % of 1 min. load on all cores fe. 100 means that load for last min is 4 when device has 4 cpu cores\n"+
+		"\t\t5 and 15 minute levels will be calculated from this value by decreasing them by 5 and 10 accordingly\n"+
+		"\tjnx - % of cpu utilization\n"+
+		"\tcisco - overall cpu busy % in the last 1 minute period\n"+
+		"\t\t5 minute level will be calculated from this value by decreasing value by 5\n"+
+		"\trcsw - % of cpu utilization\n"+
+		"\tmoxasw - overall cpu busy % in the last 5 sec period\n"+
+		"\t\t30 sec and 5 minute levels will be calculated from this value by decreasing value by 5 and 10 accordingly",
+	)
+	var crit = flag.String("c", "95", "[critical level]. Look at warning level explanation")
+	var ctype = flag.String("t", "", "<check type>\n"+
+		"\thost - uses hostmib\n"+
+		"\tsysstats - uses UCD-SNMP-MIB systemStats\n"+
+		"\tloadavg - uses UCD-SNMP-MIB laTable\n"+
+		"\tjnx - uses jnxOperatingTable\n"+
+		"\tcisco - uses ciscoProcessMIB\n"+
+		"\trcsw - uses rcDeviceStsCpuUsagePercent\n"+
+		"\tmoxasw - uses moxa MIB",
+	)
+	var dbg = flag.Bool("d", false, "Using this parameter will print out debug info")
 	var ver = flag.Bool("v", false, "Using this parameter will display the version number and exit")
 
 	flag.Parse()
@@ -49,13 +61,19 @@ func main() {
 
 	// Show version
 	if *ver {
-		fmt.Println("Plugin version " + Version)
+		fmt.Println("plugin version " + Version)
 		os.Exit(check.RetVal())
 	}
 
 	// Exit if no host submitted
 	if net.ParseIP(*host) == nil {
-		fmt.Println("Valid host ip is required")
+		fmt.Println("valid host ip is required")
+		os.Exit(check.RetVal())
+	}
+
+	// Exit if no type submitted
+	if *ctype == "" {
+		fmt.Println("check type required")
 		os.Exit(check.RetVal())
 	}
 
@@ -72,71 +90,28 @@ func main() {
 	}
 
 	// Initialize session
-	err := session.New()
+	sess, err := session.New()
 	if err != nil {
-		fmt.Printf("SNMP error: %v\n", err)
+		fmt.Printf("snmp error: %v\n", err)
 		os.Exit(check.RetVal())
 	}
 
-	// Do SNMP query
-	err = session.Walk(procLoad, true, true)
-	if err != nil {
-		fmt.Printf("SNMP error: %v\n", err)
-		os.Exit(check.RetVal())
+	// Get CPU load
+	load := cpu.Load{
+		Check: check,
+		Sess:  sess,
+		Warn:  *warn,
+		Crit:  *crit,
+		Ctype: *ctype,
+		Debug: *dbg,
 	}
 
-	// DEBUG
-	// fmt.Printf("%# v\n", pretty.Formatter(res))
-
-	cpuData, err := calcCPUData(session.Result)
+	err = load.Get()
 	if err != nil {
-		fmt.Printf("CPU data error: %v\n", session.Result)
+		fmt.Println(err)
 		os.Exit(check.RetVal())
 	}
-
-	// DEBUG
-	// fmt.Printf("%# v\n", pretty.Formatter(cpuData))
-
-	level, err := check.AlarmLevel(int64(cpuData.load), *warn, *crit)
-	if err != nil {
-		fmt.Printf("Alarm level error: %v\n", err)
-		os.Exit(check.RetVal())
-	}
-
-	check.AddPerfData("'cpu usage'", cpuData.load, "%", 0, 100, *warn, *crit)
-	check.AddMsg(level, fmt.Sprintf("%d CPUs, load %d%%", cpuData.cpuCnt, cpuData.load), "")
-
-	// DEBUG
-	// fmt.Printf("%# v\n", pretty.Formatter(check))
 
 	fmt.Print(check.FinalMsg())
 	os.Exit(check.RetVal())
-}
-
-// Returns cpu usage data
-func calcCPUData(data snmphelper.SnmpOut) (*cpuLoad, error) {
-	out := &cpuLoad{}
-	var loads []int64
-
-	for _, d := range data {
-		loads = append(loads, d.Integer)
-	}
-
-	cnt := int64(len(loads))
-	if cnt == 0 {
-		return out, fmt.Errorf("CPU count 0 or unknown")
-	}
-
-	var loadSum int64 = 0
-	for _, v := range loads {
-		loadSum += v
-	}
-
-	var loadAvg float64 = float64(loadSum / cnt)
-	var load int64 = int64(math.Round(loadAvg))
-
-	out.cpuCnt = cnt
-	out.load = load
-
-	return out, nil
 }
