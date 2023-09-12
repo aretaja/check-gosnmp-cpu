@@ -1,4 +1,4 @@
-// Copyright 2021 by Marko Punnar <marko[AT]aretaja.org>
+// Copyright 2021 - 2023 by Marko Punnar <marko[AT]aretaja.org>
 // Use of this source code is governed by a GPL
 // license that can be found in the LICENSE file.
 
@@ -17,7 +17,7 @@ import (
 )
 
 // Version of release
-const Version = "1.0.1"
+const Version = "1.1.0"
 
 func main() {
 	// Parse cli arguments
