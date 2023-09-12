@@ -39,6 +39,8 @@ $check-gosnmp-cpu -h
                 jnx - % of cpu utilization
                 cisco - overall cpu busy % in the last 1 minute period
                         5 minute level will be calculated from this value by decreasing value by 5
+                timetra - overall cpu busy % in the last 1 sec period
+                        1 and 5 minute level will be calculated from this value by decreasing value by 5 accordingly
                 rcsw - % of cpu utilization
                 moxasw - overall cpu busy % in the last 5 sec period
                         30 sec and 5 minute levels will be calculated from this value by decreasing value by 5 and 10 accordingly (default "85")
