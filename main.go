@@ -37,6 +37,8 @@ func main() {
 		"\tjnx - % of cpu utilization\n"+
 		"\tcisco - overall cpu busy % in the last 1 minute period\n"+
 		"\t\t5 minute level will be calculated from this value by decreasing value by 5\n"+
+		"\ttimetra - overall cpu busy % in the last 1 sec period\n"+
+		"\t\t1 and 5 minute level will be calculated from this value by decreasing value by 5 accordingly\n"+
 		"\trcsw - % of cpu utilization\n"+
 		"\tmoxasw - overall cpu busy % in the last 5 sec period\n"+
 		"\t\t30 sec and 5 minute levels will be calculated from this value by decreasing value by 5 and 10 accordingly",
@@ -48,6 +50,7 @@ func main() {
 		"\tloadavg - uses UCD-SNMP-MIB laTable\n"+
 		"\tjnx - uses jnxOperatingTable\n"+
 		"\tcisco - uses ciscoProcessMIB\n"+
+		"\ttimetra - uses tmnxSysCpuMonTable from TIMETRA-SYSTEM-MIB\n"+
 		"\trcsw - uses rcDeviceStsCpuUsagePercent\n"+
 		"\tmoxasw - uses moxa MIB",
 	)
