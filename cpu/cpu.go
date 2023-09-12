@@ -60,6 +60,9 @@ const cpmCPUTotal1minRev = ".1.3.6.1.4.1.9.9.109.1.1.1.1.7"
 // .iso.org.dod.internet.private.enterprises.cisco.ciscoMgmt.ciscoProcessMIB.ciscoProcessMIBObjects.cpmCPU.cpmCPUTotalTable.cpmCPUTotalEntry.cpmCPUTotal5minRev
 const cpmCPUTotal5minRev = ".1.3.6.1.4.1.9.9.109.1.1.1.1.8"
 
+// .iso.org.dod.internet.private.enterprises.timetra.timetraProducts.tmnxSRMIB.tmnxSRObjs.tmnxSysObjs.sysGenInfo.tmnxSysCpuMonTable.tmnxSysCpuMonEntry.tmnxSysCpuMonCpuIdle
+const tmnxSysCpuMonCpuIdle = ".1.3.6.1.4.1.6527.3.1.2.1.1.12.1.2"
+
 // .iso.org.dod.internet.mgmt.mib-2.entityMIB.entityMIBObjects.entityPhysical.entPhysicalTable.entPhysicalEntry.entPhysicalName
 const entPhysicalName = ".1.3.6.1.2.1.47.1.1.1.1.7"
 
@@ -91,6 +94,11 @@ func (l *Load) Get() error {
 		}
 	case "cisco":
 		err := l.ciscoLoad()
+		if err != nil {
+			return err
+		}
+	case "timetra":
+		err := l.timetraLoad()
 		if err != nil {
 			return err
 		}
@@ -470,6 +478,78 @@ func (l *Load) ciscoLoad() error {
 		}
 
 		l.Check.AddPerfData("dummy", "0", "", "", "", "", "")
+	}
+
+	return nil
+}
+
+// Get load data using tmnxSysCpuMonCpuIdle oid
+func (l *Load) timetraLoad() error {
+	wPerc, err := strconv.Atoi(l.Warn)
+	if err != nil {
+		return fmt.Errorf("warning level must be integer: %v", err)
+	}
+
+	cPerc, err := strconv.Atoi(l.Crit)
+	if err != nil {
+		return fmt.Errorf("critical level must be integer: %v", err)
+	}
+
+	w1 := wPerc
+	c1 := cPerc
+	w60 := wPerc - 5
+	c60 := cPerc - 5
+	w300 := wPerc - 10
+	c300 := cPerc - 10
+
+	idle := map[string]map[string]string{
+		"u1": {
+			"oid":   tmnxSysCpuMonCpuIdle + ".1",
+			"name":  "usage_1_sec",
+			"warn":  strconv.Itoa(w1 * 100),
+			"crit":  strconv.Itoa(c1 * 100),
+			"wReal": l.Warn,
+			"cReal": l.Crit,
+		},
+		"u60": {
+			"oid":   tmnxSysCpuMonCpuIdle + ".60",
+			"name":  "usage_60_sec",
+			"warn":  strconv.Itoa(w60 * 100),
+			"crit":  strconv.Itoa(c60 * 100),
+			"wReal": fmt.Sprintf("%d", w60),
+			"cReal": fmt.Sprintf("%d", c60),
+		},
+		"u300": {
+			"oid":   tmnxSysCpuMonCpuIdle + ".300",
+			"name":  "usage_300_sec",
+			"warn":  strconv.Itoa(w300 * 100),
+			"crit":  strconv.Itoa(c300 * 100),
+			"wReal": fmt.Sprintf("%d", w300),
+			"cReal": fmt.Sprintf("%d", c300),
+		},
+	}
+
+	// Do SNMP query
+	res, err := l.Sess.Get([]string{idle["u1"]["oid"], idle["u60"]["oid"], idle["u300"]["oid"]})
+	if err != nil {
+		return fmt.Errorf("snmp error: %v", err)
+	}
+	// DEBUG
+	if l.Debug {
+		fmt.Printf("%# v\n", pretty.Formatter(res))
+	}
+
+	for _, p := range [3]string{"u1", "u60", "u300"} {
+		v := 10000 - int64(res[idle[p]["oid"]].Gauge32)
+
+		level, err := l.Check.AlarmLevel(v, idle[p]["warn"], idle[p]["crit"])
+		if err != nil {
+			return fmt.Errorf("alarm level error: %v", err)
+		}
+
+		vReal := fmt.Sprintf("%.2f", float64(v)/100)
+		l.Check.AddPerfData(idle[p]["name"], vReal, "", idle[p]["wReal"], idle[p]["cReal"], "0", "")
+		l.Check.AddMsg(level, fmt.Sprintf("%s %s", p, vReal), "")
 	}
 
 	return nil
