@@ -44,6 +44,8 @@ $check-gosnmp-cpu -h
                 rcsw - % of cpu utilization
                 moxasw - overall cpu busy % in the last 5 sec period
                         30 sec and 5 minute levels will be calculated from this value by decreasing value by 5 and 10 accordingly (default "85")
+                fastpathsw - overall cpu busy % in the last 5 sec period
+                        1 minute and 5 minute levels will be calculated from this value by decreasing value by 5 and 10 accordingly (default "85")
   -x string
         [privacy protocol] (NoPriv|DES|AES|AES192|AES256|AES192C|AES256C) (default "DES")
 
