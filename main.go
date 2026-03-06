@@ -41,7 +41,9 @@ func main() {
 		"\t\t1 and 5 minute level will be calculated from this value by decreasing value by 5 accordingly\n"+
 		"\trcsw - % of cpu utilization\n"+
 		"\tmoxasw - overall cpu busy % in the last 5 sec period\n"+
-		"\t\t30 sec and 5 minute levels will be calculated from this value by decreasing value by 5 and 10 accordingly",
+		"\t\t30 sec and 5 minute levels will be calculated from this value by decreasing value by 5 and 10 accordingly"+
+		"\tfastpathsw - overall cpu busy % in the last 5 sec period\n"+
+		"\t\t1 minute and 5 minute levels will be calculated from this value by decreasing value by 5 and 10 accordingly",
 	)
 	var crit = flag.String("c", "95", "[critical level]. Look at warning level explanation")
 	var ctype = flag.String("t", "", "<check type>\n"+
@@ -52,7 +54,8 @@ func main() {
 		"\tcisco - uses ciscoProcessMIB\n"+
 		"\ttimetra - uses tmnxSysCpuMonTable from TIMETRA-SYSTEM-MIB\n"+
 		"\trcsw - uses rcDeviceStsCpuUsagePercent\n"+
-		"\tmoxasw - uses moxa MIB",
+		"\tmoxasw - uses moxa MIB\n"+
+		"\tfastpathsw - uses EdgeSwitch-SWITCHING-MIB",
 	)
 	var dbg = flag.Bool("d", false, "Using this parameter will print out debug info")
 	var ver = flag.Bool("v", false, "Using this parameter will display the version number and exit")

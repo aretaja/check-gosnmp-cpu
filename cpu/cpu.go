@@ -4,6 +4,7 @@ package cpu
 import (
 	"fmt"
 	"math"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -69,6 +70,9 @@ const entPhysicalName = ".1.3.6.1.2.1.47.1.1.1.1.7"
 // .iso.org.dod.internet.private.enterprises.ruggedcom.ruggedcomMgmt.rcSysInfo.rcDeviceStatus.rcDeviceStsCpuUsagePercent
 const rcDeviceStsCpuUsagePercent = ".1.3.6.1.4.1.15004.4.2.2.6.0"
 
+// .iso.org.dod.internet.private.enterprises.broadcom.broadcomProducts.fastPath.fastPathSwitching.agentInfoGroup.agentSwitchCpuProcessGroup.agentSwitchCpuProcessTotalUtilization
+const agentSwitchCpuProcessTotalUtilization = ".1.3.6.1.4.1.4413.1.1.1.1.4.9.0"
+
 // Do the work
 func (l *Load) Get() error {
 	switch l.Ctype {
@@ -109,6 +113,11 @@ func (l *Load) Get() error {
 		}
 	case "moxasw":
 		err := l.moxaSwLoad()
+		if err != nil {
+			return err
+		}
+	case "fastpathsw":
+		err := l.fastPathSwLoad()
 		if err != nil {
 			return err
 		}
@@ -649,6 +658,81 @@ func (l *Load) moxaSwLoad() error {
 	}
 	l.Check.AddPerfData("usage_300s", fmt.Sprintf("%d", l300), "%", w300s, c300s, "0", "100")
 	l.Check.AddMsg(level, fmt.Sprintf("300s %d%%", l300), "")
+
+	return nil
+}
+
+// Get load data using agentSwitchCpuProcessTotalUtilization oid
+func (l *Load) fastPathSwLoad() error {
+	// Get cpu utilization info
+	res, err := l.Sess.Get([]string{agentSwitchCpuProcessTotalUtilization})
+	if err != nil {
+		return fmt.Errorf("snmp error: %v", err)
+	}
+	// DEBUG
+	if l.Debug {
+		fmt.Printf("%# v\n", pretty.Formatter(res))
+	}
+
+	// Extract the three percentage values in order: 5s, 60s, 300s
+	re := regexp.MustCompile(`\(\s*([\d.]+)%\)`)
+	matches := re.FindAllStringSubmatch(res[agentSwitchCpuProcessTotalUtilization].OctetString, -1)
+	if len(matches) != 3 {
+		return fmt.Errorf("didn't find 3 percentage values in %v", res[agentSwitchCpuProcessTotalUtilization].OctetString)
+	}
+
+	// DEBUG
+	if l.Debug {
+		fmt.Printf("%# v\n", pretty.Formatter(matches))
+	}
+
+	// Convert the percentage strings to int64 values
+	var u5, u60, u300 int64
+	vals := []*int64{&u5, &u60, &u300}
+	for i, m := range matches {
+		f, parseErr := strconv.ParseFloat(strings.TrimSpace(m[1]), 64)
+		if parseErr != nil {
+			return fmt.Errorf("parse float %q: %w", m[1], parseErr)
+		}
+		*vals[i] = int64(math.Round(f))
+	}
+
+	wInt, err := strconv.Atoi(l.Warn)
+	if err != nil {
+		return fmt.Errorf("warning level must be integer: %v", err)
+	}
+
+	cInt, err := strconv.Atoi(l.Crit)
+	if err != nil {
+		return fmt.Errorf("critical level must be integer: %v", err)
+	}
+
+	// Calculate alarm levels for 60s and 300s values
+	w60s := strconv.Itoa(wInt - 5)
+	c60s := strconv.Itoa(cInt - 5)
+	w300s := strconv.Itoa(wInt - 10)
+	c300s := strconv.Itoa(cInt - 10)
+
+	level, err := l.Check.AlarmLevel(u5, l.Warn, l.Crit)
+	if err != nil {
+		return fmt.Errorf("alarm level error: %v", err)
+	}
+	l.Check.AddPerfData("usage_5s", fmt.Sprintf("%d", u5), "%", l.Warn, l.Crit, "0", "100")
+	l.Check.AddMsg(level, fmt.Sprintf("usage 5s %d%%", u5), "")
+
+	level, err = l.Check.AlarmLevel(u60, w60s, c60s)
+	if err != nil {
+		return fmt.Errorf("alarm level error: %v", err)
+	}
+	l.Check.AddPerfData("usage_60s", fmt.Sprintf("%d", u60), "%", w60s, c60s, "0", "100")
+	l.Check.AddMsg(level, fmt.Sprintf("60s %d%%", u60), "")
+
+	level, err = l.Check.AlarmLevel(u300, w300s, c300s)
+	if err != nil {
+		return fmt.Errorf("alarm level error: %v", err)
+	}
+	l.Check.AddPerfData("usage_300s", fmt.Sprintf("%d", u300), "%", w300s, c300s, "0", "100")
+	l.Check.AddMsg(level, fmt.Sprintf("300s %d%%", u300), "")
 
 	return nil
 }
